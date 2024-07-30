@@ -4,7 +4,6 @@ import json
 import os
 import ssl
 import pandas as pd
-import requests
 import logging
 from datetime import datetime
 from azure.kusto.data import KustoConnectionStringBuilder
@@ -12,7 +11,10 @@ from azure.kusto.ingest import QueuedIngestClient, IngestionProperties, ReportLe
 from azure.kusto.data.data_format import DataFormat
 from azure.identity import ClientSecretCredential
 from azure.kusto.data.exceptions import KustoServiceError
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -52,12 +54,12 @@ def save_to_kql(input_data, output_data):
     ]
     df = pd.DataFrame(data=[combined_data], columns=columns)
 
-    cluster = "https://ingest-trd-bm11prjec8t48s5ruy.z8.kusto.fabric.microsoft.com/"
-    database = "splinter_db"
-    table = "splinter_data"
-    tenant_id = "077104d2-9b90-4ca9-8afb-9657962a1309"
-    client_id = "4f09a177-020f-4c51-abb6-36ef18cd5d14"
-    client_secret = "msl8Q~K_..m3_baSbjM15PmwW56CNlzox36ioc4v"
+    cluster = os.getenv('KUSTO_CLUSTER')
+    database = os.getenv('KUSTO_DATABASE')
+    table = os.getenv('KUSTO_TABLE')
+    tenant_id = os.getenv('TENANT_ID')
+    client_id = os.getenv('CLIENT_ID')
+    client_secret = os.getenv('CLIENT_SECRET')
 
     credentials = ClientSecretCredential(tenant_id, client_id, client_secret)
     kcsb = KustoConnectionStringBuilder.with_aad_application_key_authentication(cluster, client_id, client_secret, tenant_id)
@@ -83,42 +85,50 @@ def save_to_kql(input_data, output_data):
 st.title("Splinter Prediction and KQL Ingestion")
 
 with st.form("input_form"):
-     input_data = [
-        st.number_input('Steep Lye Alk.'),
-        st.number_input('Steep Lye Temp'),
-        st.number_input('Dissolver Lye Conc _gpl_'),
-        st.number_input('Dissolver Ball Fall'),
-        st.number_input('Rec BF'),
-        st.number_input('Rec KW'),
-        st.number_input('Flash Dearator'),
-        st.number_input('GCF delta Flow Stage 1'),
-        st.number_input('GCF delta Flow Stage 2'),
-        st.number_input('GCF delta Flow Stage 3'),
-        st.number_input('Machine Ball Fall'),
-        st.number_input('Machine RI'),
-        st.number_input('Machine Alk.'),
-        st.number_input('Machine Cellulose'),
-        st.number_input('Vis M_C temp'),
-        st.number_input('MC 1 Sulphate Conc'),
-        st.number_input('MC 1 Spin bath Acid'),
-        st.number_input('MC 1 Spin bath ZnSO4'),
-        st.number_input('MC 1 Spin bath temp.'),
-        st.number_input('SB feed flow Side A'),
-        st.number_input('SB feed flow Side B'),
-        st.number_input('Viscose Total volume'),
-        st.number_input('Viscose Pressure at Spg'),
-        st.number_input('Strectch')
+    input_data = [
+        st.number_input('Steep Lye Alk.', key='Steep_Lye_Alk'),
+        st.number_input('Steep Lye Temp', key='Steep_Lye_Temp'),
+        st.number_input('Dissolver Lye Conc _gpl_', key='Dissolver_Lye_Conc'),
+        st.number_input('Dissolver Ball Fall', key='Dissolver_Ball_Fall'),
+        st.number_input('Rec BF', key='Rec_BF'),
+        st.number_input('Rec KW', key='Rec_KW'),
+        st.number_input('Flash Dearator', key='Flash_Dearator'),
+        st.number_input('GCF delta Flow Stage 1', key='GCF_delta_Flow_Stage_1'),
+        st.number_input('GCF delta Flow Stage 2', key='GCF_delta_Flow_Stage_2'),
+        st.number_input('GCF delta Flow Stage 3', key='GCF_delta_Flow_Stage_3'),
+        st.number_input('Machine Ball Fall', key='Machine_Ball_Fall'),
+        st.number_input('Machine RI', key='Machine_RI'),
+        st.number_input('Machine Alk.', key='Machine_Alk'),
+        st.number_input('Machine Cellulose', key='Machine_Cellulose'),
+        st.number_input('Vis M_C temp', key='Vis_MC_temp'),
+        st.number_input('MC 1 Sulphate Conc', key='MC_1_Sulphate_Conc'),
+        st.number_input('MC 1 Spin bath Acid', key='MC_1_Spin_bath_Acid'),
+        st.number_input('MC 1 Spin bath ZnSO4', key='MC_1_Spin_bath_ZnSO4'),
+        st.number_input('MC 1 Spin bath temp.', key='MC_1_Spin_bath_temp'),
+        st.number_input('SB feed flow Side A', key='SB_feed_flow_Side_A'),
+        st.number_input('SB feed flow Side B', key='SB_feed_flow_Side_B'),
+        st.number_input('Viscose Total volume', key='Viscose_Total_volume'),
+        st.number_input('Viscose Pressure at Spg', key='Viscose_Pressure_at_Spg'),
+        st.number_input('Stretch', key='Stretch')
     ]
-     api_key = "5B6MhD4h83j3umAeZmO2YiaINAl0wYXl"
-     submitted = st.form_submit_button("Submit")
-     if submitted and all(input_data):
+    api_key = os.getenv('API_KEY')
+    submitted = st.form_submit_button("Submit")
+    if submitted and all(value is not None for value in input_data):
         data = {
             "input_data": [input_data],
             "params": {}
         }
         
+        st.write("Sending data to the prediction API...")
         output_data = get_prediction(data, api_key)
         if output_data:
             st.write("Prediction Results:")
-            st.write(output_data)
+            output_labels = ["TOTAL_NO", "SPECKS", "FUSED_FIBER", "BIG_FAULT"]
+            labeled_output = {label: value for label, value in zip(output_labels, output_data)}
+            st.write(labeled_output)
+            st.write("Saving results to KQL...")
             save_to_kql(input_data, output_data)
+        else:
+            st.error("Failed to get prediction from the API.")
+    else:
+        st.warning("Please fill in all the input fields.")

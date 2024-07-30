@@ -1,6 +1,7 @@
 streamlit
 pandas
 requests
+matplotlib
 azure-kusto-data
 azure-kusto-ingest
 azure-identity
